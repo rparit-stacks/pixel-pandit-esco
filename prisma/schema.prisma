@@ -1,0 +1,308 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id               String        @id @default(cuid())
+  email            String        @unique
+  password         String
+  role             Role          @default(CLIENT)
+  status           UserStatus    @default(ACTIVE)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  name             String?
+  blocksReceived   Block[]       @relation("BlocksReceived")
+  blocksInitiated  Block[]       @relation("BlocksInitiated")
+  bookingsAsClient Booking[]     @relation("ClientBookings")
+  callRequests     CallRequest[] @relation("ClientCallRequests")
+  chatMessages     ChatMessage[]
+  chatThreads      ChatThread[]  @relation("ThreadParticipants")
+  favorites        Favorite[]
+  messages         Message[]
+  profile          Profile?
+  reportsAgainst   Report[]      @relation("ReportsAgainst")
+  reportsMade      Report[]      @relation("ReportsMade")
+  reviews          Review[]      @relation("UserReviews")
+}
+
+model Profile {
+  id             String        @id @default(cuid())
+  userId         String        @unique
+  displayName    String
+  bio            String?
+  age            Int?
+  cityId         String?
+  rateHourly     Decimal?      @db.Decimal(10, 2)
+  services       String[]
+  isVerified     Boolean       @default(false)
+  isVip          Boolean       @default(false)
+  mainPhotoUrl   String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  callsEnabled   Boolean       @default(true)
+  isOnline       Boolean       @default(false)
+  phoneNumber    String?
+  rateOvernight  Decimal?      @db.Decimal(10, 2)
+  rateTwoHours   Decimal?      @db.Decimal(10, 2)
+  whatsappNumber String?
+  // Location fields: real-time location with radius
+  locationLat    Float?        // Latitude
+  locationLng    Float?        // Longitude
+  locationRadius Float?        // Radius in kilometers (1, 5, 10, 20, etc.)
+  locationAddress String?      // Human-readable address
+  bookings       Booking[]     @relation("EscortBookingsProfile")
+  callRequests   CallRequest[]
+  chatThreads    ChatThread[]  @relation("ThreadEscort")
+  favorites      Favorite[]
+  listing        Listing?
+  photos         Photo[]
+  city           City?         @relation(fields: [cityId], references: [id])
+  user           User          @relation(fields: [userId], references: [id])
+  reviews        Review[]      @relation("EscortReviews")
+  customServices Service[]
+  
+  @@index([locationLat, locationLng])
+}
+
+model Photo {
+  id        String   @id @default(cuid())
+  profileId String
+  url       String
+  alt       String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  order     Int      @default(0)
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model Service {
+  id          String        @id @default(cuid())
+  profileId   String
+  name        String
+  description String
+  price       Decimal       @db.Decimal(10, 2)
+  duration    String?       // Flexible: "2 hours", "1 night", "3 shots", "120 mins", etc.
+  // Location fields: real-time location with radius (optional, can use profile location if not set)
+  locationLat    Float?        // Latitude
+  locationLng    Float?        // Longitude
+  locationRadius Float?        // Radius in kilometers (1, 5, 10, 20, etc.)
+  locationAddress String?      // Human-readable address
+  conditions  String?
+  status      ServiceStatus @default(ACTIVE)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  profile     Profile       @relation(fields: [profileId], references: [id], onDelete: Cascade)
+
+  @@index([profileId])
+  @@index([locationLat, locationLng])
+}
+
+model City {
+  id        String    @id @default(cuid())
+  name      String
+  slug      String    @unique
+  heroImg   String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  listings  Listing[]
+  profiles  Profile[]
+}
+
+model Listing {
+  id        String   @id @default(cuid())
+  profileId String   @unique
+  title     String
+  about     String?
+  isVisible Boolean  @default(true)
+  cityId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  city      City?    @relation(fields: [cityId], references: [id])
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+}
+
+model Booking {
+  id              String        @id @default(cuid())
+  clientId        String
+  escortProfileId String
+  startAt         DateTime
+  endAt           DateTime
+  status          BookingStatus @default(PENDING)
+  price           Decimal?      @db.Decimal(10, 2)
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  client          User          @relation("ClientBookings", fields: [clientId], references: [id], onDelete: Cascade)
+  escortProfile   Profile       @relation("EscortBookingsProfile", fields: [escortProfileId], references: [id], onDelete: Cascade)
+  messages        Message[]
+  reviews         Review?
+}
+
+model Review {
+  id              String   @id @default(cuid())
+  rating          Int
+  comment         String?
+  authorId        String
+  escortProfileId String
+  bookingId       String?  @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  author          User     @relation("UserReviews", fields: [authorId], references: [id], onDelete: Cascade)
+  booking         Booking? @relation(fields: [bookingId], references: [id])
+  escortProfile   Profile  @relation("EscortReviews", fields: [escortProfileId], references: [id], onDelete: Cascade)
+}
+
+model Message {
+  id        String   @id @default(cuid())
+  bookingId String
+  senderId  String
+  body      String
+  createdAt DateTime @default(now())
+  booking   Booking  @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  sender    User     @relation(fields: [senderId], references: [id], onDelete: Cascade)
+}
+
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  profileId String
+  createdAt DateTime @default(now())
+  profile   Profile  @relation(fields: [profileId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, profileId])
+}
+
+model OtpToken {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  code      String
+  expiresAt DateTime
+  consumed  Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model CallRequest {
+  id              String            @id @default(cuid())
+  clientId        String
+  escortProfileId String
+  status          CallRequestStatus @default(PENDING)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  notes           String?
+  scheduledAt     DateTime?
+  client          User              @relation("ClientCallRequests", fields: [clientId], references: [id], onDelete: Cascade)
+  escortProfile   Profile           @relation(fields: [escortProfileId], references: [id], onDelete: Cascade)
+}
+
+model ChatThread {
+  id              String            @id @default(cuid())
+  clientId        String
+  escortProfileId String
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  status          ChatRequestStatus @default(PENDING)
+  messages        ChatMessage[]
+  client          User              @relation("ThreadParticipants", fields: [clientId], references: [id], onDelete: Cascade)
+  escortProfile   Profile           @relation("ThreadEscort", fields: [escortProfileId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, escortProfileId])
+}
+
+model ChatMessage {
+  id        String        @id @default(cuid())
+  threadId  String
+  senderId  String
+  body      String
+  createdAt DateTime      @default(now())
+  payload   Json?
+  status    MessageStatus @default(sent)
+  type      MessageType   @default(TEXT)
+  sender    User          @relation(fields: [senderId], references: [id], onDelete: Cascade)
+  thread    ChatThread    @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId])
+  @@index([senderId])
+}
+
+model Block {
+  id            String   @id @default(cuid())
+  blockerId     String
+  blockedUserId String
+  reason        String?
+  createdAt     DateTime @default(now())
+  blockedUser   User     @relation("BlocksReceived", fields: [blockedUserId], references: [id], onDelete: Cascade)
+  blocker       User     @relation("BlocksInitiated", fields: [blockerId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedUserId])
+}
+
+model Report {
+  id             String   @id @default(cuid())
+  reporterId     String
+  reportedUserId String
+  reason         String
+  details        String?
+  createdAt      DateTime @default(now())
+  status         String   @default("OPEN")
+  reportedUser   User     @relation("ReportsAgainst", fields: [reportedUserId], references: [id], onDelete: Cascade)
+  reporter       User     @relation("ReportsMade", fields: [reporterId], references: [id], onDelete: Cascade)
+}
+
+enum Role {
+  ADMIN
+  ESCORT
+  CLIENT
+}
+
+enum UserStatus {
+  ACTIVE
+  PENDING
+  SUSPENDED
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
+}
+
+enum ChatRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+}
+
+enum ServiceStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum CallRequestStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  CANCELLED
+  COMPLETED
+}
+
+enum MessageStatus {
+  sent
+  delivered
+  seen
+}
+
+enum MessageType {
+  TEXT
+  MEDIA
+  LOCATION
+  VOICE
+  OFFER
+  TODO
+}
