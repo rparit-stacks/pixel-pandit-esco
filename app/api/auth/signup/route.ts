@@ -10,6 +10,9 @@ const signupSchema = z.object({
   password: z.string().min(8, "Password must be at least 8 characters"),
   role: z.enum(["CLIENT", "ESCORT"]).default("CLIENT"),
   displayName: z.string().min(2, "Display name must be at least 2 characters").optional(),
+  confirmAge: z.boolean().refine((val) => val === true, {
+    message: "You must be 18 years or older to register",
+  }),
 })
 
 export async function POST(req: NextRequest) {

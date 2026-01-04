@@ -22,6 +22,10 @@ import {
 } from "@/components/ui/sheet"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Badge } from "@/components/ui/badge"
+import useSWR from "swr"
+
+// Fetcher for SWR
+const fetcher = (url: string) => fetch(url).then((res) => res.json())
 
 // Get initials from name or email
 function getInitials(name?: string | null, email?: string | null): string {
@@ -48,6 +52,11 @@ function getDisplayName(name?: string | null, email?: string | null): string {
 export function Header() {
   const { data: session, status } = useSession()
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+
+  const { data: subData } = useSWR(
+    status === "authenticated" ? "/api/user/subscription" : null,
+    fetcher
+  )
   
   const isLoggedIn = status === "authenticated" && !!session?.user
   const userRole = (session?.user as any)?.role
@@ -142,6 +151,19 @@ export function Header() {
                   {/* Notification dot */}
                   <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-green-500 ring-2 ring-background"></span>
                 </Link>
+
+                {/* Credit Balance */}
+                {userRole === "CLIENT" && subData?.subscription && (
+                  <Link href="/settings" className="hidden sm:flex items-center gap-2 px-3 h-10 rounded-xl bg-primary/5 hover:bg-primary/10 transition-all group border border-primary/10">
+                    <i className="fa-solid fa-coins text-primary group-hover:scale-110 transition-transform"></i>
+                    <div className="flex flex-col items-start -space-y-1">
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Balance</span>
+                      <span className="text-xs font-bold text-foreground">
+                        {subData.subscription.isUnlimited ? "Unlimited" : `${subData.subscription.chatBalance} Credits`}
+                      </span>
+                    </div>
+                  </Link>
+                )}
 
                 {/* User Menu */}
                 <DropdownMenu>

@@ -63,6 +63,14 @@ type Thread = {
   updatedAt: string
 }
 
+type Subscription = {
+  planId: string
+  chatBalance: number
+  isUnlimited: boolean
+  status: "ACTIVE" | "EXPIRED" | "CANCELLED"
+  expiresAt: string
+}
+
 type MessageStatusClient = "sending" | "sent" | "delivered" | "seen"
 
 type Message = {
@@ -105,7 +113,15 @@ export default function ChatsPage() {
     authStatus === "authenticated" ? "/api/chats/threads" : null,
     fetcher
   )
-  
+
+  const {
+    data: subData,
+    mutate: mutateSub,
+  } = useSWR<{ subscription: Subscription | null }>(
+    authStatus === "authenticated" ? "/api/user/subscription" : null,
+    fetcher
+  )
+
   const [selectedThread, setSelectedThread] = useState<Thread | null>(null)
   const [message, setMessage] = useState("")
   const [isPending, startTransition] = useTransition()
@@ -598,6 +614,7 @@ export default function ChatsPage() {
     }
     mutateMessages()
     mutateThreads()
+    mutateSub()
     playSendSound()
   }
 
@@ -793,6 +810,7 @@ export default function ChatsPage() {
       body: JSON.stringify({ threadId, status: action }),
     })
     mutateThreads()
+    mutateSub()
     if (selectedThread?.id === threadId) {
       setSelectedThread({ ...selectedThread, status: action })
     }
@@ -860,7 +878,14 @@ export default function ChatsPage() {
               </Avatar>
               <div>
                 <h1 className="text-white font-semibold text-base">Chats</h1>
-                <p className="text-[#8696a0] text-[10px]">{isEscort ? "Escort" : "Client"}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-[#8696a0] text-[10px]">{isEscort ? "Escort" : "Client"}</p>
+                  {subData?.subscription && (
+                    <Badge variant="outline" className="h-4 px-1 text-[9px] border-[#00a884] text-[#00a884] bg-[#00a884]/5">
+                      {subData.subscription.isUnlimited ? "Unlimited" : `${subData.subscription.chatBalance} Credits`}
+                    </Badge>
+                  )}
+                </div>
               </div>
             </div>
             <div className="flex items-center gap-0.5">
@@ -1513,166 +1538,182 @@ export default function ChatsPage() {
               <div className="px-2 sm:px-3 py-2 bg-[#202c33] border-t border-[#222d34] w-full overflow-x-hidden">
                 {selectedThread.status === "ACCEPTED" ? (
                   <div className="space-y-1.5">
-                    <div className="flex items-end gap-2">
-                      <EmojiPickerWrapper onEmojiClick={addEmoji} />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="h-8 w-8 text-[#8696a0] hover:bg-[#2a3942] rounded-full mb-0.5"
-                        onClick={handleAttachClick}
-                      >
-                        <Paperclip className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="hidden sm:inline-flex h-8 w-8 text-[#8696a0] hover:bg-[#2a3942] rounded-full mb-0.5"
-                        onClick={handleLocationClick}
-                      >
-                        <MapPin className="h-4 w-4" />
-                      </Button>
-                      <VoiceRecorder onSend={handleVoiceSend} disabled={!selectedThread} />
-                      <div className="flex-1 bg-[#2a3942] rounded-lg overflow-hidden">
-                        <Input
-                          placeholder="Type a message"
-                          value={message}
-                          onChange={(e) => handleMessageChange(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !e.shiftKey) {
-                              e.preventDefault()
-                              sendMessage()
-                            }
-                          }}
-                          className="bg-transparent border-0 text-white placeholder:text-[#8696a0] focus-visible:ring-0 py-2 px-3 text-sm"
-                        />
+                    {!subData?.subscription || (subData.subscription.status !== "ACTIVE") ? (
+                      <div className="flex flex-col items-center gap-2 py-3 px-4 bg-[#111b21] rounded-lg border border-amber-500/20 shadow-inner">
+                        <div className="flex items-center gap-2 text-amber-200">
+                          <Shield className="h-4 w-4" />
+                          <p className="text-xs font-medium">
+                            Active subscription required to send messages.
+                          </p>
+                        </div>
+                        <Link href={isEscort ? "/escort/subscription" : "/settings"}>
+                          <Button size="sm" className="h-8 bg-[#00a884] hover:bg-[#00a884]/90 text-white text-[11px] font-bold rounded-full px-6 transition-all shadow-lg">
+                            Upgrade Plan
+                          </Button>
+                        </Link>
                       </div>
-                      <Button 
-                        size="icon" 
-                        className="bg-[#00a884] hover:bg-[#00a884]/90 text-white rounded-full h-9 w-9 shadow-lg hover:shadow-xl transition-all mb-0.5"
-                        onClick={sendMessage} 
-                        disabled={isPending || !message.trim()}
-                      >
-                        <Send className="h-4 w-4" />
-                      </Button>
-                      <Dialog open={todoOpen} onOpenChange={setTodoOpen}>
-                        <DialogTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="hidden md:inline-flex h-9 rounded-full border-[#2a3942] text-xs text-[#d1d7db] bg-[#111b21]"
-                          >
-                            <CheckSquare className="h-3 w-3 mr-1" />
-                            Task
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="bg-[#111b21] text-white border-[#2a3942] max-w-md">
-                          <DialogHeader>
-                            <DialogTitle className="text-base">Create Task</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-3 py-2">
-                            <div className="space-y-1.5">
-                              <label className="text-xs text-[#8696a0]">Task Title</label>
-                              <Input
-                                value={todoTitle}
-                                onChange={(e) => setTodoTitle(e.target.value)}
-                                placeholder="e.g., Confirm booking time"
-                                className="bg-[#202c33] border-0 text-sm"
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault()
-                                    handleSendTODO()
-                                  }
-                                }}
-                              />
-                            </div>
-                          </div>
-                          <DialogFooter>
+                    ) : (
+                      <div className="flex items-end gap-2">
+                        <EmojiPickerWrapper onEmojiClick={addEmoji} />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 text-[#8696a0] hover:bg-[#2a3942] rounded-full mb-0.5"
+                          onClick={handleAttachClick}
+                        >
+                          <Paperclip className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="hidden sm:inline-flex h-8 w-8 text-[#8696a0] hover:bg-[#2a3942] rounded-full mb-0.5"
+                          onClick={handleLocationClick}
+                        >
+                          <MapPin className="h-4 w-4" />
+                        </Button>
+                        <VoiceRecorder onSend={handleVoiceSend} disabled={!selectedThread} />
+                        <div className="flex-1 bg-[#2a3942] rounded-lg overflow-hidden">
+                          <Input
+                            placeholder="Type a message"
+                            value={message}
+                            onChange={(e) => handleMessageChange(e.target.value)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault()
+                                sendMessage()
+                              }
+                            }}
+                            className="bg-transparent border-0 text-white placeholder:text-[#8696a0] focus-visible:ring-0 py-2 px-3 text-sm"
+                          />
+                        </div>
+                        <Button
+                          size="icon"
+                          className="bg-[#00a884] hover:bg-[#00a884]/90 text-white rounded-full h-9 w-9 shadow-lg hover:shadow-xl transition-all mb-0.5"
+                          onClick={sendMessage}
+                          disabled={isPending || !message.trim()}
+                        >
+                          <Send className="h-4 w-4" />
+                        </Button>
+                        <Dialog open={todoOpen} onOpenChange={setTodoOpen}>
+                          <DialogTrigger asChild>
                             <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setTodoOpen(false)}
+                              type="button"
+                              variant="outline"
+                              className="hidden md:inline-flex h-9 rounded-full border-[#2a3942] text-xs text-[#d1d7db] bg-[#111b21]"
                             >
-                              Cancel
+                              <CheckSquare className="h-3 w-3 mr-1" />
+                              Task
                             </Button>
-                            <Button
-                              size="sm"
-                              className="bg-[#00a884] hover:bg-[#00a884]/90"
-                              onClick={handleSendTODO}
-                              disabled={!todoTitle.trim()}
-                            >
-                              Create Task
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                      <Dialog open={offerOpen} onOpenChange={setOfferOpen}>
-                        <DialogTrigger asChild>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            className="hidden md:inline-flex h-9 rounded-full border-[#2a3942] text-xs text-[#d1d7db] bg-[#111b21]"
-                          >
-                            Create Offer
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="bg-[#111b21] text-white border-[#2a3942] max-w-md">
-                          <DialogHeader>
-                            <DialogTitle className="text-base">Create Custom Offer</DialogTitle>
-                          </DialogHeader>
-                          <div className="space-y-3 py-2">
-                            <div className="space-y-1.5">
-                              <label className="text-xs text-[#8696a0]">Title</label>
-                              <Input
-                                value={offerTitle}
-                                onChange={(e) => setOfferTitle(e.target.value)}
-                                placeholder="Dinner date, 2 hours"
-                                className="bg-[#202c33] border-0 text-sm"
-                              />
+                          </DialogTrigger>
+                          <DialogContent className="bg-[#111b21] text-white border-[#2a3942] max-w-md">
+                            <DialogHeader>
+                              <DialogTitle className="text-base">Create Task</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-3 py-2">
+                              <div className="space-y-1.5">
+                                <label className="text-xs text-[#8696a0]">Task Title</label>
+                                <Input
+                                  value={todoTitle}
+                                  onChange={(e) => setTodoTitle(e.target.value)}
+                                  placeholder="e.g., Confirm booking time"
+                                  className="bg-[#202c33] border-0 text-sm"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                      e.preventDefault()
+                                      handleSendTODO()
+                                    }
+                                  }}
+                                />
+                              </div>
                             </div>
-                            <div className="space-y-1.5">
-                              <label className="text-xs text-[#8696a0]">Amount (₹)</label>
-                              <Input
-                                type="number"
-                                min="0"
-                                value={offerAmount}
-                                onChange={(e) => setOfferAmount(e.target.value)}
-                                placeholder="5000"
-                                className="bg-[#202c33] border-0 text-sm"
-                              />
-                            </div>
-                            <div className="space-y-1.5">
-                              <label className="text-xs text-[#8696a0]">Details</label>
-                              <textarea
-                                value={offerDescription}
-                                onChange={(e) => setOfferDescription(e.target.value)}
-                                rows={3}
-                                className="w-full rounded-md bg-[#202c33] border-0 text-sm text-white p-2 resize-none"
-                                placeholder="Timing, place, included services..."
-                              />
-                            </div>
-                          </div>
-                          <DialogFooter>
+                            <DialogFooter>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setTodoOpen(false)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="bg-[#00a884] hover:bg-[#00a884]/90"
+                                onClick={handleSendTODO}
+                                disabled={!todoTitle.trim()}
+                              >
+                                Create Task
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                        <Dialog open={offerOpen} onOpenChange={setOfferOpen}>
+                          <DialogTrigger asChild>
                             <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setOfferOpen(false)}
+                              type="button"
+                              variant="outline"
+                              className="hidden md:inline-flex h-9 rounded-full border-[#2a3942] text-xs text-[#d1d7db] bg-[#111b21]"
                             >
-                              Cancel
+                              Create Offer
                             </Button>
-                            <Button
-                              size="sm"
-                              className="bg-[#00a884] hover:bg-[#00a884]/90"
-                              onClick={handleSendOffer}
-                              disabled={!offerAmount.trim()}
-                            >
-                              Send Offer
-                            </Button>
-                          </DialogFooter>
-                        </DialogContent>
-                      </Dialog>
-                    </div>
+                          </DialogTrigger>
+                          <DialogContent className="bg-[#111b21] text-white border-[#2a3942] max-w-md">
+                            <DialogHeader>
+                              <DialogTitle className="text-base">Create Custom Offer</DialogTitle>
+                            </DialogHeader>
+                            <div className="space-y-3 py-2">
+                              <div className="space-y-1.5">
+                                <label className="text-xs text-[#8696a0]">Title</label>
+                                <Input
+                                  value={offerTitle}
+                                  onChange={(e) => setOfferTitle(e.target.value)}
+                                  placeholder="Dinner date, 2 hours"
+                                  className="bg-[#202c33] border-0 text-sm"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-xs text-[#8696a0]">Amount (₹)</label>
+                                <Input
+                                  type="number"
+                                  min="0"
+                                  value={offerAmount}
+                                  onChange={(e) => setOfferAmount(e.target.value)}
+                                  placeholder="5000"
+                                  className="bg-[#202c33] border-0 text-sm"
+                                />
+                              </div>
+                              <div className="space-y-1.5">
+                                <label className="text-xs text-[#8696a0]">Details</label>
+                                <textarea
+                                  value={offerDescription}
+                                  onChange={(e) => setOfferDescription(e.target.value)}
+                                  rows={3}
+                                  className="w-full rounded-md bg-[#202c33] border-0 text-sm text-white p-2 resize-none"
+                                  placeholder="Timing, place, included services..."
+                                />
+                              </div>
+                            </div>
+                            <DialogFooter>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setOfferOpen(false)}
+                              >
+                                Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="bg-[#00a884] hover:bg-[#00a884]/90"
+                                onClick={handleSendOffer}
+                                disabled={!offerAmount.trim()}
+                              >
+                                Send Offer
+                              </Button>
+                            </DialogFooter>
+                          </DialogContent>
+                        </Dialog>
+                      </div>
+                    )}
                     {isTyping && (
                       <div className="pl-10 text-[10px] text-[#8696a0]">
                         Typing...

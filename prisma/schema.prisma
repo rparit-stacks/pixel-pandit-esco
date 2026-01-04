@@ -28,6 +28,28 @@ model User {
   reportsAgainst   Report[]      @relation("ReportsAgainst")
   reportsMade      Report[]      @relation("ReportsMade")
   reviews          Review[]      @relation("UserReviews")
+  subscription     Subscription?
+}
+
+model Subscription {
+  id           String             @id @default(cuid())
+  userId       String             @unique
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId       String             // "BASIC", "PREMIUM", "ELITE", "UNLIMITED"
+  chatBalance  Int                @default(0) // Remaining chats
+  isUnlimited  Boolean            @default(false)
+  status       SubscriptionStatus @default(ACTIVE)
+  expiresAt    DateTime
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+
+  @@index([userId])
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  EXPIRED
+  CANCELLED
 }
 
 model Profile {

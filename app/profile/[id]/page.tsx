@@ -29,8 +29,9 @@ import useSWR from "swr"
 import { useParams, useRouter } from "next/navigation"
 import { useState, useTransition } from "react"
 import { useSession } from "next-auth/react"
-import { LoadingPage } from "@/components/ui/loading-spinner"
+import { LoadingPage } from "@/components/ui/header-loading"
 import { ServiceCard } from "@/components/service-card"
+import { toast } from "sonner"
 
 type EscortDetail = {
   id: string
@@ -82,8 +83,16 @@ export default function ProfilePage() {
   const [lightboxOpen, setLightboxOpen] = useState(false)
   const [currentImageIndex, setCurrentImageIndex] = useState(0)
   const { data, error, isLoading } = useSWR<EscortDetail>(params?.id ? `/api/escorts/${params.id}` : null, fetcher)
+  const { data: subData, mutate: mutateSub } = useSWR(
+    status === "authenticated" ? "/api/user/subscription" : null,
+    fetcher
+  )
 
   const profile = data
+  const userRole = (session?.user as any)?.role
+  const subscription = subData?.subscription
+  const canChat = subscription?.isUnlimited || (subscription?.chatBalance > 0)
+  const isLowBalance = !subscription?.isUnlimited && subscription?.chatBalance === 1
 
   const toggleFavorite = () => {
     if (!profile || !isLoggedIn) {
@@ -111,6 +120,24 @@ export default function ProfilePage() {
       router.push("/login")
       return
     }
+
+    if (userRole === "ESCORT") {
+      toast.error("Escorts cannot initiate chats with other escorts.")
+      return
+    }
+
+    if (!subscription || subscription.status !== "ACTIVE") {
+      toast.error("Active subscription required to send messages.")
+      router.push("/settings")
+      return
+    }
+
+    if (!canChat) {
+      toast.error("You have run out of chat credits. Please top up.")
+      router.push("/settings")
+      return
+    }
+
     startTransition(async () => {
       try {
         const res = await fetch("/api/chats/threads", {
@@ -118,12 +145,22 @@ export default function ProfilePage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ escortProfileId: profile.id }),
         })
+
+        const result = await res.json()
+
         if (res.ok) {
           setRequestSent(true)
+          toast.success("Message request sent!")
           router.push("/chats")
+        } else {
+          toast.error(result.error || "Failed to send message request")
+          if (res.status === 403 && result.error?.includes("subscription")) {
+            router.push("/settings")
+          }
         }
       } catch (e) {
         console.error("Failed to send message request:", e)
+        toast.error("An error occurred. Please try again.")
       }
     })
   }
@@ -282,17 +319,48 @@ export default function ProfilePage() {
                 {/* Action Buttons - Mobile First */}
                 <div className="space-y-3 pt-2 md:pt-4">
                   {/* Primary Action - Full Width on Mobile */}
-                  <Button 
-                    size="lg" 
-                    className="w-full md:w-auto px-6 md:px-10 py-4 md:py-6 text-base md:text-lg font-semibold shadow-2xl hover:shadow-3xl transition-all duration-500 bg-gradient-to-r from-primary via-primary to-primary/80 md:hover:scale-105 group relative overflow-hidden" 
-                    onClick={sendMessageRequest} 
-                    disabled={isPending || requestSent}
-                  >
-                    <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
-                    <MessageSquare className="mr-2 md:mr-3 h-5 w-5 md:h-6 md:w-6 relative z-10" />
-                    <span className="relative z-10">{requestSent ? "Request Sent ✓" : isLoggedIn ? "Send Message" : "Login to Message"}</span>
-                  </Button>
-                  
+                  <div className="flex flex-col gap-2">
+                    <Button
+                      size="lg"
+                      className={`w-full md:w-auto px-6 md:px-10 py-4 md:py-6 text-base md:text-lg font-semibold shadow-2xl hover:shadow-3xl transition-all duration-500 md:hover:scale-105 group relative overflow-hidden ${
+                        !canChat && isLoggedIn && userRole === "CLIENT"
+                        ? "bg-amber-500 hover:bg-amber-600"
+                        : "bg-gradient-to-r from-primary via-primary to-primary/80"
+                      }`}
+                      onClick={sendMessageRequest}
+                      disabled={isPending || requestSent}
+                    >
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 translate-x-[-100%] group-hover:translate-x-[100%] transition-transform duration-1000"></div>
+                      <MessageSquare className="mr-2 md:mr-3 h-5 w-5 md:h-6 md:w-6 relative z-10" />
+                      <span className="relative z-10">
+                        {requestSent
+                          ? "Request Sent ✓"
+                          : !isLoggedIn
+                          ? "Login to Message"
+                          : !canChat && userRole === "CLIENT"
+                          ? "Upgrade to Message"
+                          : "Send Message"}
+                      </span>
+                    </Button>
+
+                    {isLoggedIn && userRole === "CLIENT" && (
+                      <div className="flex items-center gap-2">
+                        {isLowBalance && (
+                          <p className="text-xs font-medium text-amber-500 flex items-center gap-1 animate-pulse">
+                            <Shield className="h-3 w-3" />
+                            Low balance: 1 credit left
+                          </p>
+                        )}
+                        {!canChat && (
+                          <p className="text-xs font-medium text-amber-500 flex items-center gap-1">
+                            <Shield className="h-3 w-3" />
+                            Insufficient credits to start new chat
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
                   {/* Secondary Actions Row */}
                   <div className="grid grid-cols-2 gap-3 md:flex md:flex-wrap md:gap-4">
                     {/* WhatsApp Button */}

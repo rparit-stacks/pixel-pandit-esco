@@ -5,10 +5,14 @@ import { Footer } from "@/components/footer"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Heart, MapPin, MessageSquare, X } from "lucide-react"
+import { Heart, MapPin, MessageSquare, X, Loader2 } from "lucide-react"
 import useSWR from "swr"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { useSession } from "next-auth/react"
+import { useState, useTransition } from "react"
 import { LoadingGrid } from "@/components/ui/loading-spinner"
+import { toast } from "sonner"
 
 type FavoriteProfile = {
   id: string
@@ -36,7 +40,69 @@ const fetcher = async (url: string) => {
 }
 
 export default function SavedEscortsPage() {
+  const { data: session, status } = useSession()
+  const router = useRouter()
+  const [isPending, startTransition] = useTransition()
   const { data, error, isLoading, mutate } = useSWR<{ results: FavoriteProfile[] }>("/api/favorites", fetcher)
+
+  const { data: subData } = useSWR(
+    status === "authenticated" ? "/api/user/subscription" : null,
+    fetcher
+  )
+
+  const isLoggedIn = status === "authenticated" && !!session?.user
+  const userRole = (session?.user as any)?.role
+  const subscription = subData?.subscription
+  const canChat = subscription?.isUnlimited || (subscription?.chatBalance > 0)
+
+  const handleMessageRequest = async (escortId: string) => {
+    if (!isLoggedIn) {
+      router.push("/login")
+      return
+    }
+
+    if (userRole === "ESCORT") {
+      toast.error("Escorts cannot initiate chats with other escorts.")
+      return
+    }
+
+    if (!subscription || subscription.status !== "ACTIVE") {
+      toast.error("Active subscription required to send messages.")
+      router.push("/settings")
+      return
+    }
+
+    if (!canChat) {
+      toast.error("You have run out of chat credits. Please top up.")
+      router.push("/settings")
+      return
+    }
+
+    startTransition(async () => {
+      try {
+        const res = await fetch("/api/chats/threads", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ escortProfileId: escortId }),
+        })
+
+        const result = await res.json()
+
+        if (res.ok) {
+          toast.success("Message request sent!")
+          router.push("/chats")
+        } else {
+          toast.error(result.error || "Failed to send message request")
+          if (res.status === 403 && result.error?.includes("subscription")) {
+            router.push("/settings")
+          }
+        }
+      } catch (e) {
+        console.error("Failed to send message request:", e)
+        toast.error("An error occurred. Please try again.")
+      }
+    })
+  }
 
   const handleRemove = async (profileId: string) => {
     await fetch("/api/favorites", {
@@ -164,8 +230,18 @@ export default function SavedEscortsPage() {
                       View Profile
                     </Button>
                   </Link>
-                  <Button size="sm" variant="outline" className="w-full bg-transparent">
-                    <MessageSquare className="mr-2 h-4 w-4" />
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full bg-transparent"
+                    onClick={() => handleMessageRequest(escort.id)}
+                    disabled={isPending}
+                  >
+                    {isPending ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <MessageSquare className="mr-2 h-4 w-4" />
+                    )}
                     Message
                   </Button>
                 </div>

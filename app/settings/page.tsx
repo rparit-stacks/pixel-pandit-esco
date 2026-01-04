@@ -23,7 +23,7 @@ import { useSession, signOut } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import useSWR from "swr"
-import { User, Lock, Trash2, Shield, Save, Loader2, CheckCircle2, XCircle } from "lucide-react"
+import { User, Lock, Trash2, Shield, Save, Loader2, CheckCircle2, XCircle, Coins, CreditCard, Crown } from "lucide-react"
 
 type UserSettings = {
   user: {
@@ -119,6 +119,11 @@ export default function SettingsPage() {
     status === "authenticated" ? "/api/user/settings" : null,
     fetcher,
     { revalidateOnFocus: false }
+  )
+
+  const { data: subData, mutate: mutateSub } = useSWR(
+    status === "authenticated" ? "/api/user/subscription" : null,
+    fetcher
   )
 
   // Form state
@@ -269,10 +274,10 @@ export default function SettingsPage() {
 
           {/* Toast message */}
           {message && (
-            <div 
+            <div
               className={`mb-6 p-4 rounded-xl flex items-center gap-3 animate-in slide-in-from-top-2 ${
-                message.type === "success" 
-                  ? "bg-green-50 dark:bg-green-950/30 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800" 
+                message.type === "success"
+                  ? "bg-green-50 dark:bg-green-950/30 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800"
                   : "bg-red-50 dark:bg-red-950/30 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800"
               }`}
             >
@@ -284,6 +289,79 @@ export default function SettingsPage() {
               <span className="font-medium">{message.text}</span>
             </div>
           )}
+
+          {/* Subscription & Credits */}
+          <Card className="mb-6 rounded-2xl border-primary/20 bg-gradient-to-br from-primary/5 via-transparent to-pink-500/5 shadow-lg hover:shadow-xl transition-all">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <div className="h-10 w-10 rounded-xl bg-primary/10 flex items-center justify-center">
+                  <Crown className="h-5 w-5 text-primary" />
+                </div>
+                Subscription & Credits
+              </CardTitle>
+              <CardDescription>Manage your chat credits and membership</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-xl bg-card border border-border/50 flex flex-col gap-1 shadow-sm">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Current Plan</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xl font-bold">
+                      {subData?.subscription?.isUnlimited ? "Unlimited Access" : "Basic Plan"}
+                    </span>
+                    <Badge variant={subData?.subscription?.status === 'ACTIVE' ? "default" : "secondary"} className="rounded-md">
+                      {subData?.subscription?.status || "NO ACTIVE PLAN"}
+                    </Badge>
+                  </div>
+                </div>
+                <div className="p-4 rounded-xl bg-card border border-border/50 flex flex-col gap-1 shadow-sm">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider font-semibold">Available Credits</span>
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
+                      <Coins className="h-5 w-5 text-amber-500" />
+                    </div>
+                    <span className="text-3xl font-black text-primary tracking-tighter">
+                      {subData?.subscription?.isUnlimited ? "∞" : subData?.subscription?.chatBalance || 0}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-semibold text-sm flex items-center gap-2">
+                    <CreditCard className="h-4 w-4 text-primary" />
+                    Top Up or Upgrade
+                  </h4>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <Button variant="outline" className="h-auto py-4 flex flex-col gap-1 rounded-xl hover:border-primary/50 hover:bg-primary/5 transition-all">
+                    <span className="font-bold text-lg">5 Credits</span>
+                    <span className="text-xs text-muted-foreground">₹499</span>
+                  </Button>
+                  <div className="relative group">
+                    <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-10">
+                      <Badge className="bg-gradient-to-r from-amber-500 to-orange-500 border-0 shadow-lg px-2 text-[10px]">Popular</Badge>
+                    </div>
+                    <Button variant="outline" className="w-full h-auto py-4 flex flex-col gap-1 rounded-xl border-primary/30 bg-primary/5 hover:bg-primary/10 transition-all">
+                      <span className="font-bold text-lg">15 Credits</span>
+                      <span className="text-xs text-muted-foreground">₹1,299</span>
+                    </Button>
+                  </div>
+                  <Button className="h-auto py-4 flex flex-col gap-1 rounded-xl bg-gradient-to-r from-primary to-pink-500 hover:opacity-90 shadow-lg shadow-primary/20">
+                    <span className="font-bold text-lg">Unlimited</span>
+                    <span className="text-xs text-primary-foreground/80">₹4,999 / mo</span>
+                  </Button>
+                </div>
+                <div className="flex items-center justify-center gap-2 pt-2">
+                  <Shield className="h-3 w-3 text-muted-foreground" />
+                  <p className="text-[10px] text-muted-foreground text-center">
+                    Secure 256-bit encrypted payments. Credits never expire.
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Account Info */}
           <Card className="mb-6 rounded-2xl border-border/50 shadow-lg hover:shadow-xl transition-shadow">

@@ -1,10 +1,72 @@
+"use client"
+
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import Link from "next/link"
 import { Mail, Lock, ArrowLeft, User, Phone } from "lucide-react"
+import { useState, FormEvent } from "react"
+import { useRouter } from "next/navigation"
+import { signIn } from "next-auth/react"
 
 export default function EscortSignupPage() {
+  const router = useRouter()
+  const [fullName, setFullName] = useState("")
+  const [email, setEmail] = useState("")
+  const [phone, setPhone] = useState("")
+  const [password, setPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [confirmAge, setConfirmAge] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = async (e: FormEvent) => {
+    e.preventDefault()
+    setError(null)
+
+    if (password !== confirmPassword) {
+      setError("Passwords do not match")
+      return
+    }
+
+    setLoading(true)
+
+    try {
+      const res = await fetch("/api/auth/signup", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          password,
+          role: "ESCORT",
+          displayName: fullName,
+          confirmAge,
+        }),
+      })
+
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || "Signup failed")
+
+      // Auto-login
+      const signInResult = await signIn("credentials", {
+        email,
+        password,
+        redirect: false,
+      })
+
+      if (signInResult?.error) {
+        router.push("/login?message=Account created. Please sign in.")
+        return
+      }
+
+      router.replace("/escort/dashboard")
+    } catch (err: any) {
+      setError(err.message)
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-background">
       <div className="container mx-auto flex min-h-screen max-w-screen-xl">
@@ -24,12 +86,22 @@ export default function EscortSignupPage() {
               <p className="mt-2 text-muted-foreground">Join our premium platform and start earning</p>
             </div>
 
-            <form className="space-y-6">
+            {error && <p className="mb-4 text-sm text-red-500">{error}</p>}
+
+            <form className="space-y-6" onSubmit={handleSubmit}>
               <div className="space-y-2">
                 <Label htmlFor="fullName">Full Name</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="fullName" type="text" placeholder="Your full name" className="pl-10" required />
+                  <Input
+                    id="fullName"
+                    type="text"
+                    placeholder="Your full name"
+                    className="pl-10"
+                    required
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -37,7 +109,15 @@ export default function EscortSignupPage() {
                 <Label htmlFor="email">Email address</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="email" type="email" placeholder="you@example.com" className="pl-10" required />
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    className="pl-10"
+                    required
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -45,7 +125,15 @@ export default function EscortSignupPage() {
                 <Label htmlFor="phone">Phone Number</Label>
                 <div className="relative">
                   <Phone className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-muted-foreground" />
-                  <Input id="phone" type="tel" placeholder="+1 (555) 123-4567" className="pl-10" required />
+                  <Input
+                    id="phone"
+                    type="tel"
+                    placeholder="+1 (555) 123-4567"
+                    className="pl-10"
+                    required
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value)}
+                  />
                 </div>
               </div>
 
@@ -59,6 +147,8 @@ export default function EscortSignupPage() {
                     placeholder="Create a strong password"
                     className="pl-10"
                     required
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                   />
                 </div>
               </div>
@@ -73,30 +163,49 @@ export default function EscortSignupPage() {
                     placeholder="Confirm your password"
                     className="pl-10"
                     required
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
                   />
                 </div>
               </div>
 
-              <div className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  id="terms"
-                  className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
-                  required
-                />
-                <Label htmlFor="terms" className="text-sm font-normal leading-relaxed">
-                  I agree to the{" "}
-                  <Link href="/terms" className="text-primary hover:underline">
-                    Terms & Conditions
-                  </Link>{" "}
-                  and confirm I am 18+ years old
-                </Label>
+              <div className="space-y-4">
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    id="age-check"
+                    className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
+                    required
+                    checked={confirmAge}
+                    onChange={(e) => setConfirmAge(e.target.checked)}
+                  />
+                  <Label htmlFor="age-check" className="text-sm font-normal leading-relaxed">
+                    I confirm that I am <span className="font-bold text-foreground underline underline-offset-4 decoration-primary/50">18 years of age or older</span>.
+                  </Label>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    id="terms"
+                    className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
+                    required
+                  />
+                  <Label htmlFor="terms" className="text-sm font-normal leading-relaxed">
+                    I agree to the{" "}
+                    <Link href="/terms" className="text-primary hover:underline">
+                      Terms & Conditions
+                    </Link>{" "}
+                    and understand the safety guidelines.
+                  </Label>
+                </div>
               </div>
 
-              <Button type="submit" className="w-full" size="lg">
-                Create Account
+              <Button type="submit" className="w-full" size="lg" disabled={loading}>
+                {loading ? "Creating Account..." : "Create Account"}
               </Button>
             </form>
+
 
             <p className="mt-8 text-center text-sm text-muted-foreground">
               Already have an account?{" "}

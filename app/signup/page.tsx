@@ -18,6 +18,7 @@ export default function SignupPage() {
   const [displayName, setDisplayName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
+  const [confirmAge, setConfirmAge] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isRedirecting, setIsRedirecting] = useState(false)
@@ -52,6 +53,7 @@ export default function SignupPage() {
           password,
           role,
           displayName: role === "ESCORT" ? displayName : undefined,
+          confirmAge,
         }),
       })
       const data = await res.json()
@@ -221,23 +223,39 @@ export default function SignupPage() {
                 <p className="text-xs text-muted-foreground">Must be at least 8 characters long</p>
               </div>
 
-              <div className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  id="terms"
-                  className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
-                  required
-                />
-                <Label htmlFor="terms" className="text-sm font-normal leading-relaxed">
-                  I agree to the{" "}
-                  <Link href="/terms" className="text-primary hover:underline">
-                    Terms of Service
-                  </Link>{" "}
-                  and{" "}
-                  <Link href="/privacy" className="text-primary hover:underline">
-                    Privacy Policy
-                  </Link>
-                </Label>
+              <div className="space-y-4">
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    id="age-check"
+                    className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
+                    required
+                    checked={confirmAge}
+                    onChange={(e) => setConfirmAge(e.target.checked)}
+                  />
+                  <Label htmlFor="age-check" className="text-sm font-normal leading-relaxed">
+                    I confirm that I am <span className="font-bold text-foreground underline underline-offset-4 decoration-primary/50">18 years of age or older</span>.
+                  </Label>
+                </div>
+
+                <div className="flex items-start gap-2">
+                  <input
+                    type="checkbox"
+                    id="terms"
+                    className="mt-1 h-4 w-4 rounded border-input text-primary focus:ring-2 focus:ring-ring"
+                    required
+                  />
+                  <Label htmlFor="terms" className="text-sm font-normal leading-relaxed">
+                    I agree to the{" "}
+                    <Link href="/terms" className="text-primary hover:underline">
+                      Terms of Service
+                    </Link>{" "}
+                    and{" "}
+                    <Link href="/privacy" className="text-primary hover:underline">
+                      Privacy Policy
+                    </Link>
+                  </Label>
+                </div>
               </div>
 
               <Button type="submit" className="w-full" size="lg" disabled={loading}>

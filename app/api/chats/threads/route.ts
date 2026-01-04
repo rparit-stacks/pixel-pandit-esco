@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { resolveUser, resolveOrCreateUser, resolveEscortWithProfile } from "@/lib/user-resolver"
 import { Role, ChatRequestStatus } from "@prisma/client"
+import { canInitiateChat, deductChatCredit } from "@/lib/subscription"
 
 export async function GET() {
   try {
@@ -82,6 +83,12 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Only clients can start chats" }, { status: 403 })
     }
 
+    // Check subscription and balance
+    const { allowed, reason } = await canInitiateChat(user.id)
+    if (!allowed) {
+      return NextResponse.json({ error: reason }, { status: 403 })
+    }
+
     const body = await request.json()
     const { escortProfileId } = body
     
@@ -148,6 +155,14 @@ export async function PATCH(request: Request) {
       return NextResponse.json({ error: error || "Unauthorized" }, { status: 401 })
     }
 
+    // Check if escort has an active subscription
+    const escortSub = await getActiveSubscription(user.id)
+    if (!escortSub) {
+      return NextResponse.json({
+        error: "An active subscription is required to manage chat requests. Please upgrade your plan."
+      }, { status: 403 })
+    }
+
     const body = await request.json()
     const { threadId, status } = body
     
@@ -165,6 +180,11 @@ export async function PATCH(request: Request) {
     
     if (!thread) {
       return NextResponse.json({ error: "Thread not found" }, { status: 404 })
+    }
+
+    // If accepting a PENDING thread, deduct credit from client
+    if (status === "ACCEPTED" && thread.status === ChatRequestStatus.PENDING) {
+      await deductChatCredit(thread.clientId)
     }
 
     const updatedThread = await prisma.chatThread.update({

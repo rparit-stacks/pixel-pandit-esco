@@ -5,7 +5,6 @@ import { FeaturesSection } from "@/components/landing/features-section"
 import { HowItWorksSection } from "@/components/landing/how-it-works-section"
 import { CategoriesSection } from "@/components/landing/categories-section"
 import { StatsSection } from "@/components/landing/stats-section"
-import { TestimonialsSection } from "@/components/landing/testimonials-section"
 import { TrustSection } from "@/components/landing/trust-section"
 import { FaqSection } from "@/components/landing/faq-section"
 import { CtaSection } from "@/components/landing/cta-section"
@@ -74,7 +73,6 @@ export default function LandingPage() {
       <HowItWorksSection />
       <CategoriesSection />
       <StatsSection />
-      <TestimonialsSection />
       <TrustSection />
       <FaqSection />
       <CtaSection />

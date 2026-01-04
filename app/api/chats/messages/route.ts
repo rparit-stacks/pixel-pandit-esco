@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { prisma } from "@/lib/db"
 import { resolveUser } from "@/lib/user-resolver"
+import { getActiveSubscription, canSendMessageType } from "@/lib/subscription"
 import { ChatRequestStatus, MessageType, MessageStatus } from "@prisma/client"
 import { z } from "zod"
 
@@ -26,13 +27,13 @@ export async function GET(request: Request) {
 
     const thread = await prisma.chatThread.findUnique({
       where: { id: threadId },
-      select: { 
-        clientId: true, 
+      select: {
+        clientId: true,
         status: true,
-        escortProfile: { select: { userId: true } } 
+        escortProfile: { select: { userId: true } }
       },
     })
-    
+
     if (!thread) {
       return NextResponse.json({ error: "Thread not found" }, { status: 404 })
     }
@@ -48,14 +49,14 @@ export async function GET(request: Request) {
     const rawMessages = await prisma.chatMessage.findMany({
       where: { threadId },
       orderBy: { createdAt: "asc" },
-      select: { 
-        id: true, 
-        senderId: true, 
-        body: true, 
+      select: {
+        id: true,
+        senderId: true,
+        body: true,
         type: true,
         payload: true,
         status: true,
-        createdAt: true 
+        createdAt: true
       },
     })
 
@@ -88,15 +89,15 @@ export async function POST(request: Request) {
       where: { id: parsed.data.threadId },
       include: { escortProfile: { select: { userId: true } } },
     })
-    
+
     if (!thread) {
       return NextResponse.json({ error: "Thread not found" }, { status: 404 })
     }
 
     // Check if thread is accepted
     if (thread.status !== ChatRequestStatus.ACCEPTED) {
-      return NextResponse.json({ 
-        error: "Chat request must be accepted before sending messages" 
+      return NextResponse.json({
+        error: "Chat request must be accepted before sending messages"
       }, { status: 403 })
     }
 
@@ -106,6 +107,14 @@ export async function POST(request: Request) {
 
     if (!isClient && !isEscort) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    // Check if sender has an active subscription
+    const subscription = await getActiveSubscription(user.id)
+    if (!subscription) {
+      return NextResponse.json({
+        error: "Active subscription required to send messages. Please upgrade your plan."
+      }, { status: 403 })
     }
 
     // Determine message type and payload
@@ -186,6 +195,14 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Either body or type+payload required" }, { status: 400 })
     }
 
+    // Check if plan supports this message type
+    const isAllowed = await canSendMessageType(user.id, msgType)
+    if (!isAllowed) {
+      return NextResponse.json({
+        error: `Your current plan does not support ${msgType.toLowerCase()} messages. Please upgrade to a higher plan.`
+      }, { status: 403 })
+    }
+
     const message = await prisma.chatMessage.create({
       data: {
         threadId: parsed.data.threadId,
@@ -195,14 +212,14 @@ export async function POST(request: Request) {
         payload: payload,
         status: MessageStatus.sent,
       },
-      select: { 
-        id: true, 
-        senderId: true, 
-        body: true, 
+      select: {
+        id: true,
+        senderId: true,
+        body: true,
         type: true,
         payload: true,
         status: true,
-        createdAt: true 
+        createdAt: true
       },
     })
 
